@@ -30,6 +30,21 @@
  * More pin layouts for other boards can be found here: https://github.com/miguelbalboa/rfid#pin-layout
  */
 
+#include <WiFi.h>
+#include <WiFiUdp.h>
+
+IPAddress remoteIP(10,224,94,195);
+int remotePort = 7777;
+// WiFi network name and password:
+const char * networkName = "TAMU_IoT";
+const char * networkPswd = "";
+//Are we currently connected?
+boolean connected = false;
+char outputBuffer[255];
+//The udp library class
+WiFiUDP udp;
+
+
 #include <SPI.h>
 #include <MFRC522.h>
 
@@ -45,6 +60,10 @@ byte nuidPICC[4];
 
 void setup() { 
   Serial.begin(9600);
+
+  //Connect to the WiFi network
+  connectToWiFi(networkName, networkPswd);
+
   SPI.begin(); // Init SPI bus
   rfid.PCD_Init(); // Init MFRC522 
 
@@ -58,6 +77,13 @@ void setup() {
 }
  
 void loop() {
+
+  ReadRFID();
+
+}
+
+void ReadRFID()
+{
 
   // Reset the loop if no new card present on the sensor/reader. This saves the entire process when idle.
   if ( ! rfid.PICC_IsNewCardPresent())
@@ -79,16 +105,10 @@ void loop() {
     return;
   }
 
-  if (rfid.uid.uidByte[0] != nuidPICC[0] || 
-    rfid.uid.uidByte[1] != nuidPICC[1] || 
-    rfid.uid.uidByte[2] != nuidPICC[2] || 
-    rfid.uid.uidByte[3] != nuidPICC[3] ) {
-    Serial.println(F("A new card has been detected."));
 
-    // Store NUID into nuidPICC array
-    for (byte i = 0; i < 4; i++) {
-      nuidPICC[i] = rfid.uid.uidByte[i];
-    }
+  Serial.println(F("A new card has been detected."));
+
+
    
     Serial.println(F("The NUID tag is:"));
     Serial.print(F("In hex: "));
@@ -97,8 +117,11 @@ void loop() {
     Serial.print(F("In dec: "));
     printDec(rfid.uid.uidByte, rfid.uid.size);
     Serial.println();
-  }
-  else Serial.println(F("Card read previously."));
+  
+
+  //send UDP message of bytes
+  SendMessage(String(rfid.uid.uidByte));
+
 
   // Halt PICC
   rfid.PICC_HaltA();
@@ -107,11 +130,10 @@ void loop() {
   rfid.PCD_StopCrypto1();
 }
 
-
 /**
  * Helper routine to dump a byte array as hex values to Serial. 
  */
-void printHex(byte *buffer, byte bufferSize) {
+String printHex(byte *buffer, byte bufferSize) {
   for (byte i = 0; i < bufferSize; i++) {
     Serial.print(buffer[i] < 0x10 ? " 0" : " ");
     Serial.print(buffer[i], HEX);
@@ -126,4 +148,52 @@ void printDec(byte *buffer, byte bufferSize) {
     Serial.print(buffer[i] < 0x10 ? " 0" : " ");
     Serial.print(buffer[i], DEC);
   }
+}
+
+void SendMessage(String message)
+{
+  udp.beginPacket(remoteIP, remotePort);
+
+  String IpMessage = WiFi.localIP().toString() +"/" + message;
+  Serial.println(IpMessage);
+
+  IpMessage.toCharArray(outputBuffer, 255);
+
+  //strcpy(outputBuffer, message);   
+  udp.write((byte*)outputBuffer, strlen(outputBuffer));
+  udp.endPacket();
+}
+
+
+void connectToWiFi(const char * ssid, const char * pwd){
+  Serial.println("Connecting to WiFi network: " + String(ssid));
+
+  // delete old config
+  WiFi.disconnect(true);
+  //register event handler
+  WiFi.onEvent(WiFiEvent);
+  
+  //Initiate connection
+  WiFi.begin(ssid, pwd);
+  WiFi.setSleep(false);
+  Serial.println("Waiting for WIFI connection...");
+}
+
+//wifi event handler
+void WiFiEvent(WiFiEvent_t event){
+    switch(event) {
+      case SYSTEM_EVENT_STA_GOT_IP:
+          //When connected set 
+          Serial.print("WiFi connected! IP address: ");
+          Serial.println(WiFi.localIP());  
+          //initializes the UDP state
+          //This initializes the transfer buffer
+          udp.begin(WiFi.localIP(),remotePort);
+          connected = true;
+          break;
+      case SYSTEM_EVENT_STA_DISCONNECTED:
+          Serial.println("WiFi lost connection");
+          connected = false;
+          break;
+    }
 }
