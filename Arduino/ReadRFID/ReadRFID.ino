@@ -33,11 +33,11 @@
 #include <WiFi.h>
 #include <WiFiUdp.h>
 
-IPAddress remoteIP(10,224,94,195);
+IPAddress remoteIP(192,168,1,10);
 int remotePort = 7777;
 // WiFi network name and password:
-const char * networkName = "TAMU_IoT";
-const char * networkPswd = "";
+const char * networkName = "DADA_TRAIN";
+const char * networkPswd = "icytrain110";
 //Are we currently connected?
 boolean connected = false;
 char outputBuffer[255];
@@ -120,7 +120,7 @@ void ReadRFID()
   
 
   //send UDP message of bytes
-  SendMessage(String(rfid.uid.uidByte));
+  SendMessage(printHex(rfid.uid.uidByte, rfid.uid.size));
 
 
   // Halt PICC
@@ -134,10 +134,15 @@ void ReadRFID()
  * Helper routine to dump a byte array as hex values to Serial. 
  */
 String printHex(byte *buffer, byte bufferSize) {
+  String hex;
   for (byte i = 0; i < bufferSize; i++) {
-    Serial.print(buffer[i] < 0x10 ? " 0" : " ");
-    Serial.print(buffer[i], HEX);
+    hex += buffer[i] < 0x10 ? " 0" : " ";
+    hex += buffer[i], HEX;
+    //Serial.print(buffer[i] < 0x10 ? " 0" : " ");
+    //Serial.print(buffer[i], HEX);
   }
+
+  return hex;
 }
 
 /**
